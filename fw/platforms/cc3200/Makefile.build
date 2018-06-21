@@ -105,6 +105,7 @@ VPATH = $(MGOS_VPATH) $(APP_SOURCE_DIRS) $(MGOS_SRC_PATH) $(MGOS_CC32XX_PATH)/sr
         $(BOOT_PATH)/lib \
         $(MONGOOSE_PATH) $(FROZEN_PATH)
 IPATH = $(MGOS_IPATH) $(sort $(APP_SOURCE_DIRS) $(APP_INCLUDES)) \
+        $(MGOS_CC32XX_PATH)/include $(MGOS_CC32XX_PATH)/include/spiffs \
         $(MGOS_CC32XX_PATH)/src $(MGOS_CC3200_PATH)/src \
         $(BOOT_PATH)/lib $(GEN_DIR) \
         $(MBEDTLS_PATH)/include $(MBEDTLS_PATH)/cc32xx
@@ -192,7 +193,7 @@ VPATH += $(SDK_PATH)/driverlib $(SDK_PATH)/oslib $(SDK_PATH)/simplelink \
 SDK_CFLAGS = -DTARGET_IS_CC3200 -DUSE_FREERTOS
 
 MGOS_SRCS += $(notdir $(wildcard $(MGOS_CC3200_PATH)/src/*.c)) \
-             cc32xx_exc.c arm_exc.c arm_exc_top.S \
+             cc32xx_exc.c arm_exc.c arm_exc_top.S arm_nsleep100.c arm_nsleep100_m4.S \
              cc32xx_fs.c cc32xx_gpio.c cc32xx_hal.c cc32xx_hash.c cc32xx_hw_timers.c \
              cc32xx_libc.c cc32xx_main.c cc32xx_sl_spawn.c cc32xx_uart.c \
              cc32xx_vfs.c cc32xx_vfs_dev_slfs_container.c cc32xx_vfs_fs_slfs.c
@@ -264,7 +265,7 @@ MGOS_CONF_SCHEMA += $(MGOS_CC3200_PATH)/src/cc3200_sys_config.yaml
 
 $(BUILD_DIR)/miniz.o: CFLAGS += -DMINIZ_NO_STDIO
 
-$(FS_IMG): $(APP_FS_DIRS) $(MGOS_CONFIG_C) $(MGOS_RO_VARS_C) $(FS_FILES) $(MK_FS_META_BIN)
+$(FS_IMG): $(APP_FS_DIRS) $(MGOS_CONFIG_C) $(MGOS_RO_VARS_C) $(FS_FILES) $(MK_FS_META_BIN) $(MKSPIFFS)
 	$(call mkspiffs,$(FS_SIZE),$(FS_BLOCK_SIZE),$(FS_PAGE_SIZE),$(FS_ERASE_SIZE))
 	$(Q) $(MK_FS_META_BIN) $(FS_SIZE) $(FS_BLOCK_SIZE) $(FS_PAGE_SIZE) $(FS_ERASE_SIZE) >> $@
 
@@ -306,7 +307,7 @@ endif
 
 C_CXX_FLAGS += -DNDEBUG -DCS_NDEBUG -DARM_HAVE_FPU=0 \
                -DSRAM_BASE_ADDR=0x20000000 -DSRAM_SIZE=0x40000 \
-               -DFW_ARCHITECTURE=$(APP_PLATFORM) \
+               -DFW_ARCHITECTURE=$(APP_PLATFORM) -DIRAM= \
                $(patsubst %,-I%,$(subst :, ,$(IPATH))) \
                $(MG_FEATURES) $(MGOS_FEATURES) $(MGOS_CC3200_FEATURES) \
                $(MGOS_CFLAGS)
@@ -367,7 +368,7 @@ $(BUILD_DIR)/%.asm.o: %.asm $(GENFILES_LIST)
 
 $(BUILD_DIR)/%.S.o: %.S $(GENFILES_LIST)
 	$(vecho) "GCCAS $@"
-	$(Q) arm-none-eabi-gcc -mthumb -mcpu=cortex-m4 $(C_CXX_FLAGS) -Wundef -c -x assembler-with-cpp $< -o $@
+	$(Q) arm-none-eabi-gcc -mthumb -mcpu=cortex-m4 $(C_CXX_FLAGS) -Wundef -c -ggdb -x assembler-with-cpp $< -o $@
 
 $(FFI_EXPORTS_C): $(APP_FS_FILES)
 	$(call gen_ffi_exports,$@,$(FFI_SYMBOLS),$(filter %.js,$(FS_FILES)))

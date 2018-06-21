@@ -158,7 +158,7 @@ VPATH = $(MGOS_VPATH) $(APP_SOURCE_DIRS) $(MGOS_SRC_PATH) $(MONGOOSE_PATH) \
         $(MGOS_ESP_SRC_PATH) $(SPIFFS_PATH) $(COMMON_ESP8266_PATH) \
         $(COMMON_ESP_PATH)
 IPATH = $(MGOS_IPATH) $(sort $(APP_SOURCE_DIRS) $(APP_INCLUDES)) \
-        $(SPIFFS_PATH) $(MGOS_ESP8266_PATH)/include \
+        $(SPIFFS_PATH) $(MGOS_ESP8266_PATH)/include $(MGOS_ESP8266_PATH)/include/spiffs \
         $(BOOTLOADER_PATH)/rboot $(SDK_PATH)/include/lwip \
         $(SDK_PATH) $(SDK_PATH)/include \
         $(COMMON_ESP8266_PATH) $(COMMON_ESP_PATH) \
@@ -197,7 +197,7 @@ FEATURES = $(MG_FEATURES) $(MGOS_FEATURES) $(MGOS_ESP_FEATURES) \
 
 MEMORY_FLAGS = -DFS_MAX_OPEN_FILES=5
 
-.PHONY: all clean build-lib
+.PHONY: all clean
 
 MGOS_CFLAGS = -DMGOS_APP=\"$(APP)\" \
               -DMGOS_MAX_NUM_UARTS=2 \
@@ -451,10 +451,14 @@ $(BUILD_DIR)/dummy_main.c: $(APP_OBJS) $(MGOS_ESP8266_PATH)/Makefile.build
             "void __cyg_profile_func_enter(void *this_fn, void *call_site){(void) this_fn; (void) call_site;}" \
             "void __cyg_profile_func_exit(void *this_fn, void *call_site){(void) this_fn; (void) call_site;}" > $@
 
-# Main app lib.
 $(MGOS_LIB): $(MGOS_OBJS)
 	$(vecho) "AR    $@"
 	$(Q) $(AR) cru $@ $^
+
+# lib.a, used during lib release build.
+$(BUILD_DIR)/$(BUILD_LIB_NAME): $(BUILD_DIR) $(APP_OBJS)
+	$(vecho) "AR    $@"
+	$(AR) cru $@ $(APP_OBJS)
 
 # This rule is for normal (pre-existing) C sources from VPATH.
 $(BUILD_DIR)/%.c.o: %.c $(GENFILES_FLAG)
@@ -512,15 +516,9 @@ $(MG_BUILD_INFO_C): $(MGOS_OBJS)
 # Pull in auto-generated .c dependencies (if any).
 -include $(wildcard $(BUILD_DIR)/*.d)
 
-# Build lib.a
-
-$(BUILD_DIR)/$(BUILD_LIB_NAME): $(BUILD_DIR) $(APP_OBJS)
-	$(vecho) "AR    $@"
-	$(AR) cru $@ $(APP_OBJS)
-
 # -- Filesystem.
 
-$(FS_IMG): $(APP_FS_DIRS) $(FS_FILES) $(MGOS_CONFIG_C) $(MGOS_RO_VARS_C)
+$(FS_IMG): $(APP_FS_DIRS) $(FS_FILES) $(MGOS_CONFIG_C) $(MGOS_RO_VARS_C) $(MKSPIFFS)
 	$(call mkspiffs,$(FS_SIZE),$(FS_BLOCK_SIZE),$(FS_PAGE_SIZE),$(FS_ERASE_SIZE))
 
 #

@@ -49,6 +49,8 @@ SECTIONS
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
     . = ALIGN(4);
+    *(.fs_bin)         /* Initial filesystem image */
+    . = ALIGN(4);
   } >FLASH
 
   .ARM.extab   : { *(.ARM.extab* .gnu.linkonce.armextab.*) } >FLASH
@@ -91,6 +93,7 @@ SECTIONS
     *(.data*)          /* .data* sections */
 
     . = ALIGN(4);
+    *(.iram .iram.*)   /* code placed in RAM */
     _edata = .;        /* define a global symbol at data end */
   } >SRAM AT> FLASH
 
@@ -128,12 +131,6 @@ SECTIONS
     . = ALIGN(8);
     _heap_end = .;
   } >SRAM
-
-  /* Filesystem image */
-  .fs_bin (ADDR(.isr_vector) + FS_BASE_ADDR) :
-  {
-    *(.fs_bin)
-  } >FLASH
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

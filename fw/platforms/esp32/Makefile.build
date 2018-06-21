@@ -128,11 +128,12 @@ export MGOS_CONF_SCHEMA
 export MGOS_IPATH
 
 # Flags for other component builds, including SPIFFS, go here.
-CFLAGS += -Wall -Werror -mtext-section-literals \
+CFLAGS += -Wall -Werror -pipe -mtext-section-literals \
           -I$(MGOS_PATH) -I$(MGOS_SRC_PATH) -I$(MGOS_INCLUDE_PATH) \
+          -I$(MGOS_PATH)/fw/platforms/esp32/include/spiffs \
           -DMBEDTLS_X509_CA_CHAIN_ON_DISK \
           $(APP_CFLAGS)
-CXXFLAGS += $(APP_CXXFLAGS)
+CXXFLAGS += -pipe $(APP_CXXFLAGS)
 
 # Settings for the ESP-IDF build system
 # See docs here:
@@ -150,7 +151,7 @@ COMPONENT_DIRS = $(COMMON_PATH) \
 SDK_COMPONENTS = app_trace app_update bootloader bootloader_support cxx driver \
                  esp_adc_cal esp32 esptool_py ethernet expat freertos heap \
                  log lwip micro-ecc newlib nvs_flash partition_table pthread soc \
-                 spi_flash tcpip_adapter vfs wpa_supplicant xtensa-debug-module
+                 spi_flash smartconfig_ack tcpip_adapter vfs wpa_supplicant xtensa-debug-module
 
 MGOS_MAIN_COMPONENT ?= mosapp
 
@@ -199,7 +200,7 @@ $(FW_DIR) $(FW_STAGING_DIR) $(GEN_DIR):
 	$(vecho) "MKDIR $@"
 	$(Q) mkdir -p $@
 
-$(FW_MANIFEST): $(APP_BIN) $(BOOTLOADER_BIN) $(PARTITION_TABLE_BIN) $(FS_IMG)
+$(FW_MANIFEST): $(APP_BIN) $(BOOTLOADER_BIN) $(PARTITION_TABLE_BIN) $(FS_IMG) $(MKSPIFFS)
 
 # mgos_config is generated during binary build
 $(GEN_DIR)/mgos_config_schema.json $(GEN_DIR)/mgos_ro_vars_schema.json: all_binaries
