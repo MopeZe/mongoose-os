@@ -104,6 +104,14 @@ static void mgos_net_on_change_cb(void *arg) {
       }
       break;
     }
+    case MGOS_NET_EV_AP_CONNECTED: {
+      LOG(LL_INFO, ("%s: AP connected", if_name));
+      break;
+    }
+    case MGOS_NET_EV_AP_DISCONNECTED: {
+      LOG(LL_INFO, ("%s: AP disconnected", if_name));
+      break;
+    }
   }
 
   mgos_event_trigger(ei->ev, &evd);
