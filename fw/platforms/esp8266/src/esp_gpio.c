@@ -32,10 +32,6 @@
 #include "common/cs_dbg.h"
 #include "esp_periph.h"
 
-#if MGOS_NUM_GPIO != GPIO_PIN_COUNT
-#error MGOS_NUM_GPIO must match GPIO_PIN_COUNT
-#endif
-
 #define GPIO_PIN_COUNT 16
 
 static uint8_t s_int_config[GPIO_PIN_COUNT];
@@ -198,7 +194,7 @@ IRAM static void esp8266_gpio_isr(void *arg) {
   (void) arg;
 }
 
-IRAM void mgos_gpio_hal_int_clr(int pin) {
+IRAM void mgos_gpio_clear_int(int pin) {
   GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << pin);
 }
 
@@ -268,6 +264,20 @@ IRAM bool mgos_gpio_disable_int(int pin) {
   s_int_config[pin] &= INT_TYPE_MASK;
   gpio_pin_intr_state_set(GPIO_ID_PIN(pin), GPIO_PIN_INTR_DISABLE);
   return true;
+}
+
+const char *mgos_gpio_str(int pin_def, char buf[8]) {
+  int i = 0;
+  if (pin_def >= 0) {
+    if (pin_def < 10) {
+      buf[i++] = '0' + pin_def;
+    } else {
+      buf[i++] = '1';
+      buf[i++] = '0' + (pin_def - 10);
+    }
+  }
+  buf[i++] = '\0';
+  return buf;
 }
 
 /* From gpio_register.h */

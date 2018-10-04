@@ -4,7 +4,6 @@
 #
 # GC_DEBUG: if "true" (default) enables string ASN checks
 # STACK_GUARD: if "true" (default) enables soft stack guard
-# SSL: chooses SSL library to use. Currently onle "mbedTLS" is supported
 # HEAP_LOG: if "1", compiles ESP firmware with heap logging feature: there are
 #           logging wrappers for malloc and friends. You can later view heap
 #           map by `tools/heaplog_viewer/heaplog_viewer.html`
@@ -26,21 +25,10 @@ APP_INCLUDES ?=
 APP_FS_FILES ?=
 # List of static libs (.a) which are parts of the app
 APP_BIN_LIBS ?=
-
-# NOTE: those two are deprecated. Use APP_SOURCES and APP_FS_FILES instead.
-APP_MODULES ?=
-APP_FS_PATH ?=
+# Extra parts to include in firmware
+APP_EXTRA_FW_PARTS ?=
 
 BUILD_LIB_NAME ?= lib.a
-
-# For backward compatibility, convert old APP_MODULES and APP_FS_PATH into
-# new APP_SOURCES and APP_FS_FILES
-ifneq "$(APP_MODULES)" ""
-APP_SOURCES += $(foreach m,$(APP_MODULES),$(m)/*.c $(m)/*.cpp)
-endif
-ifneq "$(APP_FS_PATH)" ""
-APP_FS_FILES += $(foreach m,$(APP_FS_PATH),$(m)/*)
-endif
 
 # Get list of dirs which contain sources and filesystem files
 APP_SOURCE_DIRS = $(sort $(dir $(APP_SOURCES)))
@@ -56,7 +44,6 @@ include $(MGOS_PATH)/fw/common.mk
 COMMON_ESP_PATH ?= $(COMMON_PATH)/platforms/esp/src
 COMMON_ESP8266_PATH ?= $(COMMON_PATH)/platforms/esp8266
 MGOS_ESP8266_PATH ?= $(MGOS_PATH)/fw/platforms/esp8266
-MBEDTLS_PATH ?= /opt/cs_mbedtls
 SPIFFS_PATH ?= $(COMMON_PATH)/spiffs
 UMM_MALLOC_PATH ?= $(COMMON_PATH)/umm_malloc
 BOOTLOADER_PATH ?= $(COMMON_ESP8266_PATH)/rboot
@@ -68,6 +55,9 @@ MGOS_ENABLE_HEAP_LOG ?= 0
 MGOS_ENABLE_CALL_TRACE ?= 0
 MGOS_ESP8266_RTOS ?= 0
 
+# Normally boot loader is not updated during OTA update.
+# The firmware built with this flag set to true will, when used for OTA,
+# will reflash the boot loader as well.
 MGOS_UPDATE_BOOT_LOADER ?= false
 
 FLASH_SIZE ?= 4194304
@@ -96,8 +86,6 @@ FS_STAGING_DIR = $(BUILD_DIR)/fs
 FW_SECTS = .text .data .rodata
 FW_USER_ARGS = -quiet -bin -boot2
 
-# SSL can be None or mbedTLS
-SSL ?= mbedTLS
 include $(COMMON_ESP8266_PATH)/common.mk
 
 MGOS_ESP_SRC_PATH = $(MGOS_ESP8266_PATH)/src
@@ -113,15 +101,10 @@ MGOS_SRCS += cs_file.c cs_rbuf.c \
              mgos_time.c \
              mgos_timers.c \
              mgos_mmap_esp.c \
-             mgos_mongoose.c \
              mgos_sys_config.c $(notdir $(MGOS_CONFIG_C)) $(notdir $(MGOS_RO_VARS_C)) \
              mgos_system.c \
              mgos_uart.c \
              mgos_utils.c \
-             mgos_vfs.c \
-             mgos_vfs_dev.c \
-             mgos_vfs_dev_ram.c \
-             mgos_vfs_fs_spiffs.c \
              cs_crc32.c \
              rboot-bigflash.c rboot-api.c \
              json_utils.c \
@@ -132,8 +115,6 @@ MGOS_SRCS += esp_config.c \
              esp_coredump.c \
              esp_debug.c \
              esp_exc.c \
-             esp_flash_writer.c \
-             esp_fs.c \
              esp_gpio.c \
              esp_hal.c \
              esp_heap_trace.c \
@@ -142,9 +123,7 @@ MGOS_SRCS += esp_config.c \
              esp_libc.c \
              esp_main.c \
              esp_periph.c \
-             esp_uart.c \
-             esp_updater.c \
-             esp_vfs_dev_sysflash.c
+             esp_uart.c
 
 MGOS_SRCS += $(notdir $(foreach m,$(SPIFFS_PATH) $(COMMON_ESP8266_PATH),$(wildcard $(m)/*.c)))
 APP_SRCS := $(notdir $(foreach m,$(APP_SOURCES),$(wildcard $(m)))) $(APP_EXTRA_SRCS)
@@ -201,7 +180,6 @@ MEMORY_FLAGS = -DFS_MAX_OPEN_FILES=5
 
 MGOS_CFLAGS = -DMGOS_APP=\"$(APP)\" \
               -DMGOS_MAX_NUM_UARTS=2 \
-              -DMGOS_NUM_GPIO=16 \
               -DC_DISABLE_BUILTIN_SNPRINTF
 
 MGOS_LIB = $(BUILD_DIR)/mongoose-os.a
@@ -217,7 +195,7 @@ MG_BUILD_INFO_C = $(GEN_DIR)/mg_build_info.c
 MG_BUILD_INFO_O = $(BUILD_DIR)/mg_build_info.c.o
 FFI_EXPORTS_C = $(GEN_DIR)/ffi_exports.c
 FFI_EXPORTS_O = $(BUILD_DIR)/ffi_exports.c.o
-GENFILES_FLAG = $(BUILD_DIR)/genfiles.done
+GENFILES_FLAG = $(GEN_DIR)/genfiles.done
 GENFILES_LIST = $(MGOS_CONFIG_C) $(MGOS_RO_VARS_C)
 IMAGE_HEADER_SIZE = 0
 MAP_FILE = $(BUILD_DIR)/$(APP).elf.map
@@ -257,30 +235,6 @@ $(LWIP_LIB): $(LWIP_PATH)
 		APP=liblwip_cs BUILD_DIR=$(abspath $(LWIP_BUILD_DIR)) \
 		COMMON_ESP8266_PATH=$(COMMON_ESP8266_PATH) \
 		CFLAGS_EXTRA="$(HEAP_LOG_FLAGS)"
-endif
-
-ifeq "$(SSL)" "mbedTLS"
-  IPATH += $(MBEDTLS_PATH)/include
-  MGOS_SRCS += esp_crypto.c
-  MGOS_ESP_FEATURES += -DMG_ENABLE_SSL -DMG_SSL_IF=MG_SSL_IF_MBEDTLS \
-                       -DMG_SSL_IF_MBEDTLS_FREE_CERTS \
-                       -DMG_SSL_IF_MBEDTLS_MAX_FRAG_LEN=1024 \
-                       -DMBEDTLS_X509_CA_CHAIN_ON_DISK
-  MBEDTLS_CFLAGS = $(CFLAGS)
-  MGOS_CONF_SCHEMA += $(MGOS_ESP_SRC_PATH)/esp_mbedtls_config.yaml
-  ifeq "$(MGOS_HAVE_ATCA)" "1"
-    MBEDTLS_CFLAGS += -DMBEDTLS_ECP_ATCA -DMBEDTLS_X509_CA_CHAIN_ON_DISK -I$(ATCA_PATH)/lib
-    SSL_LIBS = $(addprefix $(MBEDTLS_PATH)/library/,libmbedcrypto_atca.a libmbedtls_atca.a libmbedx509_atca.a)
-  else
-    SSL_LIBS = $(addprefix $(MBEDTLS_PATH)/library/,libmbedcrypto.a libmbedtls.a libmbedx509.a)
-  endif
-
-$(SSL_LIBS):
-	$(Q) $(MAKE) -j4 -C $(MBEDTLS_PATH)/library $(notdir $@) \
-		CC=$(CC) AR=$(AR) \
-		CFLAGS="$(MBEDTLS_CFLAGS)"
-else
-  SSL_LIBS =
 endif
 
 MGOS_OBJS = $(addprefix $(BUILD_DIR)/,$(MGOS_SRCS:=.o)) \
@@ -417,7 +371,8 @@ FW_PARTS = boot:addr=$(BOOT_LOADER_ADDR),src=$(BOOT_LOADER_BIN),update=$(MGOS_UP
            fw:addr=$(APP0_ADDR),src=$(APP_BIN) \
            fs:src=$(FS_IMG),type=fs,addr=$(FS0_ADDR),fs_size=$(FS_SIZE),fs_block_size=$(FS_BLOCK_SIZE),fs_page_size=$(FS_PAGE_SIZE),fs_erase_size=$(FS_ERASE_SIZE) \
            rf_cal_data:addr=$(FW_RF_CAL_DATA_ADDR),size=$(RF_CAL_DATA_SIZE),fill=0xff \
-           sys_params:type=sys_params,src=$(SDK_INIT_DATA_PATH)/bin/esp_init_data_default_v08.bin,addr=$(SYS_PARAMS_ADDR)
+           sys_params:type=sys_params,src=$(SDK_INIT_DATA_PATH)/bin/esp_init_data_default_v08.bin,addr=$(SYS_PARAMS_ADDR) \
+           $(APP_EXTRA_FW_PARTS)
 
 include $(MGOS_PATH)/common/scripts/fw_meta.mk
 
@@ -436,7 +391,7 @@ $(BREAKDOWN_FILE): $(APP_ELF)
 # -- Linking.
 
 # Link the main ELF output file.
-BIN_PARTS = $(BUILD_DIR)/esp_cache.c.o $(APP_OBJS) $(FFI_EXPORTS_O) $(BUILD_INFO_O) $(MG_BUILD_INFO_O) $(MGOS_LIB) $(ATCA_LIB) $(LWIP_LIB) $(SSL_LIBS) $(APP_BIN_LIB_FILES)
+BIN_PARTS = $(BUILD_DIR)/esp_cache.c.o $(APP_OBJS) $(FFI_EXPORTS_O) $(BUILD_INFO_O) $(MG_BUILD_INFO_O) $(MGOS_LIB) $(LWIP_LIB) $(APP_BIN_LIB_FILES)
 $(APP_ELF): $(BIN_PARTS) $(LD_SCRIPT)
 ifeq "$(MGOS_ESP8266_RTOS)" "1"
 	$(OBJCOPY) --weaken-symbol printf --weaken-symbol puts /opt/Espressif/esp-open-sdk/xtensa-lx106-elf/xtensa-lx106-elf/lib/libc.a
@@ -493,7 +448,7 @@ $(LD_SCRIPT): $(LD_SCRIPT_TEMPL)
 include $(MGOS_PATH)/common/scripts/build_info.mk
 include $(MGOS_PATH)/common/scripts/ffi_exports.mk
 include $(MGOS_PATH)/fw/src/mgos_config.mk
-include $(MGOS_PATH)/fw/src/spiffs.mk
+include $(MGOS_PATH)/fw/src/mkfs.mk
 
 MGOS_CONF_SCHEMA += $(MGOS_ESP_SRC_PATH)/esp_sys_config.yaml
 
@@ -538,6 +493,3 @@ $(BOOT_LOADER_BIN): $(ESPTOOL2) $(GENFILES_LIST)
 
 clean:
 	$(Q) rm -rf $(BUILD_DIR) $(FW_DIR)
-ifeq "$(SSL)" "mbedTLS"
-	$(Q) $(MAKE) -C $(MBEDTLS_PATH)/library clean
-endif

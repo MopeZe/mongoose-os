@@ -71,17 +71,23 @@ void mgos_msleep(uint32_t msecs) {
 
 void HAL_Delay(__IO uint32_t ms) __attribute__((alias("mgos_msleep")));
 
-static void __attribute__((naked)) delay_cycles(unsigned long ulCount) {
+static void delay_cycles(unsigned long n) {
   __asm(
-      "    subs    r0, #1\n"
-      "    bne     delay_cycles\n"
-      "    bx      lr");
+      "dcy: subs    %0, #1\n"
+      "     bne     dcy\n"
+      : /* output */
+      : /* input */ "r"(n)
+      : /* scratch */);
 }
 
 void mgos_usleep(uint32_t usecs) {
+#ifndef MGOS_BOOT_BUILD
   int ticks = usecs / (1000000 / configTICK_RATE_HZ);
   int remainder = usecs % (1000000 / configTICK_RATE_HZ);
   if (ticks > 0) vTaskDelay(ticks);
+#else
+  uint32_t remainder = usecs;
+#endif
   if (remainder > 0) delay_cycles(remainder * (SystemCoreClock / 1000000));
 }
 
@@ -89,13 +95,20 @@ void mgos_usleep(uint32_t usecs) {
 int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len) {
   RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;
   RNG->CR = RNG_CR_RNGEN;
-  int i = 0;
+  size_t i = 0, j = 0;
   do {
     if (RNG->SR & RNG_SR_DRDY) {
       uint32_t rnd = RNG->DR;
       size_t l = MIN(len - i, sizeof(rnd));
       memcpy(buf + i, &rnd, l);
       i += l;
+    } else {
+      j++;
+      if (j > 1000) {
+        LOG(LL_ERROR,
+            ("RNG is not working! ST 0x%lx CR 0x%lx", RNG->SR, RNG->CR));
+        return -1;
+      }
     }
   } while (i < len);
   (void) ctx;
@@ -108,7 +121,7 @@ uint32_t HAL_GetTick(void) {
 }
 
 /* LwIP time function, returns timestamp in milliseconds. */
-u32_t sys_now(void) {
+uint32_t sys_now(void) {
   return HAL_GetTick();
 }
 
@@ -119,7 +132,7 @@ IWDG_HandleTypeDef hiwdg = {
         {
          .Prescaler = IWDG_PRESCALER_256,
          .Reload = 5 * IWDG_1_SECOND,
-#ifdef STM32F7
+#ifdef IWDG_WINDOW_DISABLE
          .Window = IWDG_WINDOW_DISABLE,
 #endif
         },
@@ -151,10 +164,45 @@ void mgos_wdt_disable(void) {
   }
 }
 
-void mgos_bitbang_write_bits_js(void) {
-  /* TODO */
-}
-
 uint32_t mgos_get_cpu_freq(void) {
   return SystemCoreClock;
 }
+
+#if !MG_LWIP
+uint32_t swap_bytes_32(uint32_t x) {
+  return (((x & 0xff) << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) |
+          ((x & 0xff000000) >> 24));
+}
+
+uint16_t swap_bytes_16(uint16_t x) {
+  return ((x << 8) | (x >> 8));
+}
+
+const char *inet_ntop(int af, const void *src, char *dst, int size) {
+  switch (af) {
+    case AF_INET: {
+      if (size < 16) return NULL;
+      uint32_t a = (((struct in_addr *) src)->s_addr);
+      sprintf(dst, "%lu.%lu.%lu.%lu", (a & 0xff), ((a >> 8) & 0xff),
+              ((a >> 16) & 0xff), ((a >> 24) & 0xff));
+      break;
+    }
+#if 0
+    case AF_INET6: {
+      if (size < 48) return NULL;
+      sprintf(dst, "...");
+      break;
+    }
+#endif
+    default:
+      return NULL;
+  }
+  return dst;
+}
+
+char *inet_ntoa(struct in_addr in) {
+  static char str[16];
+  return (char *) inet_ntop(AF_INET, &in, str, sizeof(str));
+}
+
+#endif

@@ -84,7 +84,7 @@
 #include <stdint.h>
 extern uint32_t SystemCoreClock;
 #include "stm32_sdk_hal.h"
-#if defined(STM32F4)
+#if defined(STM32F4) || defined(STM32L4)
 #include <core_cm4.h>
 #elif defined(STM32F7)
 #include <core_cm7.h>
@@ -97,7 +97,7 @@ extern uint32_t SystemCoreClock;
 #define configCPU_CLOCK_HZ (SystemCoreClock)
 #define configTICK_RATE_HZ ((TickType_t) 100)
 #define configMAX_PRIORITIES 25
-#define configMINIMAL_STACK_SIZE (1024)  // In words, so 4K
+#define configMINIMAL_STACK_SIZE (256)  // In words, so 1K
 #define configTOTAL_HEAP_SIZE ((size_t)(2 * 1024))
 #define configMAX_TASK_NAME_LEN (16)
 #define configUSE_TRACE_FACILITY 0
@@ -122,7 +122,7 @@ extern uint32_t SystemCoreClock;
 #define configUSE_TIMERS 1
 #define configTIMER_TASK_PRIORITY (1)
 #define configTIMER_QUEUE_LENGTH 10
-#define configTIMER_TASK_STACK_DEPTH (3072)
+#define configTIMER_TASK_STACK_DEPTH configMINIMAL_STACK_SIZE
 
 /* Set the following definitions to 1 to include the API function, or zero
 to exclude the API function. */
@@ -162,7 +162,7 @@ See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY \
   (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
-#define configASSERT(x) assert(x)
+// #define configASSERT(x) assert(x)
 
 /* Definitions that map the FreeRTOS port interrupt handlers to their CMSIS
 standard names. */

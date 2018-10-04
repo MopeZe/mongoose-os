@@ -46,17 +46,21 @@
 #ifndef CS_FW_PLATFORMS_STM32_INCLUDE_STM32F4XX_HAL_CONF_H_
 #define CS_FW_PLATFORMS_STM32_INCLUDE_STM32F4XX_HAL_CONF_H_
 
+#include <assert.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Exported types ------------------------------------------------------------*/
-/* Exported constants --------------------------------------------------------*/
+/* Asserts are disabled by default, they use too much flash space. */
+// #define USE_FULL_ASSERT 1
+#ifdef USE_FULL_ASSERT
+#define assert_param(x) assert(x)
+#else
+#define assert_param(x)
+#endif
 
-/* ########################## Module Selection ############################## */
-/**
-  * @brief This is the list of modules to be used in the HAL driver
-  */
+/* We enable all the modules, unused code is dropped when linking. */
 #define HAL_MODULE_ENABLED
 #define HAL_ADC_MODULE_ENABLED
 #define HAL_CAN_MODULE_ENABLED
@@ -132,9 +136,8 @@ extern "C" {
   * @brief External Low Speed oscillator (LSE) value.
   */
 #if !defined(LSE_VALUE)
-#define LSE_VALUE \
-  (32768U) /*!< Value of the External Low Speed oscillator in Hz */
-#endif     /* LSE_VALUE */
+#define LSE_VALUE 0
+#endif /* LSE_VALUE */
 
 #if !defined(LSE_STARTUP_TIMEOUT)
 #define LSE_STARTUP_TIMEOUT (5000U) /*!< Time out for LSE start up, in ms */
@@ -165,21 +168,7 @@ extern "C" {
 #define INSTRUCTION_CACHE_ENABLE 1
 #define DATA_CACHE_ENABLE 1
 
-/* ########################## Assert Selection ############################## */
-/**
-  * @brief Uncomment the line below to expanse the "assert_param" macro in the
-  *        HAL drivers code
-  */
-#define USE_FULL_ASSERT 1
-
-/* ################## SPI peripheral configuration ########################## */
-
-/* CRC FEATURE: Use to activate CRC feature inside HAL SPI Driver
-* Activated: CRC code is present inside driver
-* Deactivated: CRC code cleaned from driver
-*/
-
-#define USE_SPI_CRC 1U
+#define USE_SPI_CRC 0
 
 /* Includes ------------------------------------------------------------------*/
 /**
@@ -353,24 +342,6 @@ extern "C" {
 #ifdef HAL_SPDIFRX_MODULE_ENABLED
 #include "stm32f4xx_hal_spdifrx.h"
 #endif /* HAL_SPDIFRX_MODULE_ENABLED */
-
-/* Exported macro ------------------------------------------------------------*/
-#ifdef USE_FULL_ASSERT
-/**
-  * @brief  The assert_param macro is used for function's parameters check.
-  * @param  expr: If expr is false, it calls assert_failed function
-  *         which reports the name of the source file and the source
-  *         line number of the call that failed.
-  *         If expr is true, it returns no value.
-  * @retval None
-  */
-#define assert_param(expr) \
-  ((expr) ? (void) 0 : assert_failed((uint8_t *) __FILE__, __LINE__))
-/* Exported functions ------------------------------------------------------- */
-void assert_failed(uint8_t *file, uint32_t line);
-#else
-#define assert_param(expr) ((void) 0U)
-#endif /* USE_FULL_ASSERT */
 
 #ifdef __cplusplus
 }

@@ -35,20 +35,14 @@ FFI_EXPORTS_O = $(BUILD_DIR)/ffi_exports.o
 NM = xtensa-esp32-elf-nm
 
 MGOS_SRCS += mgos_config_util.c mgos_core_dump.c mgos_dlsym.c mgos_event.c mgos_hal_freertos.c \
-             mgos_gpio.c mgos_init.c mgos_mmap_esp.c mgos_mongoose.c \
+             mgos_gpio.c mgos_init.c mgos_mmap_esp.c \
              mgos_sys_config.c $(notdir $(MGOS_CONFIG_C)) $(notdir $(MGOS_RO_VARS_C)) \
              mgos_hw_timers.c mgos_system.c mgos_time.c mgos_timers.c mgos_uart.c mgos_utils.c \
-             mgos_vfs.c mgos_vfs_dev.c mgos_vfs_dev_ram.c mgos_vfs_fs_spiffs.c \
-             esp32_crypto.c esp32_debug.c esp32_exc.c esp32_fs.c esp32_fs_crypt.c \
-             esp32_vfs_dev_partition.c \
+             esp32_crypto.c esp32_debug.c esp32_exc.c esp32_fs_crypt.c \
              esp32_gpio.c esp32_hal.c esp32_hw_timers.c \
              esp32_main.c esp32_uart.c
 
 include $(MGOS_PATH)/common/scripts/ffi_exports.mk
-
-ifeq "$(MGOS_ENABLE_UPDATER)" "1"
-  MGOS_SRCS += esp32_updater.c
-endif
 
 include $(MGOS_PATH)/common/scripts/build_info.mk
 
@@ -81,11 +75,7 @@ C_CXX_CFLAGS += -DMGOS_APP=\"$(APP)\" -DFW_ARCHITECTURE=$(APP_PLATFORM) \
                 $(MG_FEATURES_TINY) -DMG_NET_IF=MG_NET_IF_LWIP_LOW_LEVEL \
                 $(MGOS_FEATURES) -DMGOS_MAX_NUM_UARTS=3 \
                 -DMGOS_DEBUG_UART=$(MGOS_DEBUG_UART) \
-                -DMGOS_NUM_GPIO=40 \
                 -DMG_ENABLE_FILESYSTEM \
-                -DMG_ENABLE_SSL -DMG_SSL_IF=MG_SSL_IF_MBEDTLS \
-                -DMG_SSL_IF_MBEDTLS_FREE_CERTS \
-                -DMG_SSL_IF_MBEDTLS_MAX_FRAG_LEN=2048 \
                 -DMG_ENABLE_DIRECTORY_LISTING \
                 -DCS_DISABLE_MD5 -DMG_EXT_MD5 \
                 -DCS_DISABLE_SHA1 -DMG_EXT_SHA1
@@ -134,5 +124,5 @@ $(FFI_EXPORTS_C): $(APP_FS_FILES)
 	  -c $< -o $@
 
 COMPONENT_EXTRA_INCLUDES = $(MGOS_ESP_SRC_PATH) $(MGOS_ESP_PATH)/include $(MGOS_ESP_PATH)/include/spiffs \
-                           $(SPIFFS_PATH) $(GEN_DIR) $(sort $(APP_SOURCE_DIRS) $(APP_INCLUDES)) $(MGOS_IPATH) \
+                           $(SPIFFS_PATH) $(GEN_DIR) $(sort $(APP_SOURCE_DIRS)) $(MGOS_IPATH) \
                            $(IDF_PATH)/components/freertos/include/freertos

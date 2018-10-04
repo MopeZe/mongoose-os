@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
+#include <string.h>
+
 #include "stm32_sdk_hal.h"
+#include "stm32_system.h"
 
 uint32_t SystemCoreClock = HSI_VALUE;
 const uint8_t AHBPrescTable[16] = {0, 0, 0, 0, 0, 0, 0, 0,
@@ -23,13 +26,16 @@ const uint8_t AHBPrescTable[16] = {0, 0, 0, 0, 0, 0, 0, 0,
 const uint8_t APBPrescTable[8] = {0, 0, 0, 0, 1, 2, 3, 4};
 #define VECT_TAB_OFFSET 0x0
 
-void SystemInit(void) {
-/* FPU settings ------------------------------------------------------------*/
+#include "mgos_gpio.h"
+
+static IRAM void stm32f7_enable_caches(void);
+static IRAM void stm32f7_disable_caches(void);
+
+void stm32_system_init(void) {
 #if (__FPU_PRESENT == 1) && (__FPU_USED == 1)
   SCB->CPACR |=
       ((3UL << 10 * 2) | (3UL << 11 * 2)); /* set CP10 and CP11 Full Access */
 #endif
-  /* Reset the RCC clock configuration to the default reset state ------------*/
   /* Set HSION bit */
   RCC->CR |= (uint32_t) 0x00000001;
 
@@ -48,51 +54,30 @@ void SystemInit(void) {
   /* Disable all interrupts */
   RCC->CIR = 0x00000000;
 
-/* Configure the Vector Table location add offset address ------------------*/
-#ifdef VECT_TAB_SRAM
-  SCB->VTOR = RAMDTCM_BASE |
-              VECT_TAB_OFFSET; /* Vector Table Relocation in Internal SRAM */
-#else
-  SCB->VTOR = FLASH_BASE |
-              VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH */
-#endif
-
-  __HAL_FLASH_PREFETCH_BUFFER_ENABLE();
-  SCB_EnableICache();
-  SCB_EnableDCache();
-
-  HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
-  HAL_NVIC_SetPriority(MemoryManagement_IRQn, 0, 0);
-  HAL_NVIC_SetPriority(BusFault_IRQn, 0, 0);
-  HAL_NVIC_SetPriority(UsageFault_IRQn, 0, 0);
-  HAL_NVIC_SetPriority(DebugMonitor_IRQn, 0, 0);
-
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
+  stm32f7_disable_caches();
+  stm32f7_enable_caches();
 }
 
 void stm32_clock_config(void) {
   RCC_OscInitTypeDef oc;
   RCC_ClkInitTypeDef cc;
   RCC_PeriphCLKInitTypeDef pcc;
+  memset(&cc, 0, sizeof(cc));
+  memset(&oc, 0, sizeof(oc));
+  memset(&pcc, 0, sizeof(pcc));
 
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
 
-/* Configure the clock source and PLL. */
+  oc.OscillatorType = RCC_OSCILLATORTYPE_LSE;
+  oc.LSEState = (LSE_VALUE == 0 ? RCC_LSE_OFF : RCC_LSE_ON);
 #if HSE_VALUE == 0
-  oc.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  oc.OscillatorType |= RCC_OSCILLATORTYPE_HSI;
   oc.HSIState = RCC_HSI_ON;
-  oc.HSICalibrationValue = 16;
   oc.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   oc.PLL.PLLM = HSI_VALUE / 1000000;  // VCO input = 1 MHz
 #else
-  oc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  oc.OscillatorType |= RCC_OSCILLATORTYPE_HSE;
   oc.HSEState = RCC_HSE_ON;
   oc.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   oc.PLL.PLLM = HSE_VALUE / 1000000;  // VCO input = 1 MHz
@@ -126,14 +111,96 @@ void stm32_clock_config(void) {
   pcc.Clk48ClockSelection = RCC_CLK48SOURCE_PLL;
   HAL_RCCEx_PeriphCLKConfig(&pcc);
 
-/* Turn off the unused oscilaltor. */
+  /* Turn off unused oscillators. */
+  oc.OscillatorType = 0;
 #if HSE_VALUE == 0
-  oc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  oc.OscillatorType |= RCC_OSCILLATORTYPE_HSE;
   oc.HSEState = RCC_HSE_OFF;
 #else
-  oc.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  oc.OscillatorType |= RCC_OSCILLATORTYPE_HSI;
   oc.HSIState = RCC_HSI_OFF;
+#endif
+#if LSE_VALUE == 0
+  oc.OscillatorType |= RCC_OSCILLATORTYPE_LSE;
+  oc.LSEState = RCC_LSE_OFF;
 #endif
   oc.PLL.PLLState = RCC_PLL_NONE; /* Don't touch the PLL config */
   HAL_RCC_OscConfig(&oc);
+}
+
+static IRAM void stm32f7_disable_caches(void) {
+  SCB->CCR &= ~(SCB_CCR_IC_Msk | SCB_CCR_DC_Msk);
+  __DSB();
+  __ISB();
+  SCB->ICIALLU = 0UL; /* Flush ICache */
+  FLASH->ACR &= ~(FLASH_ACR_ARTEN | FLASH_ACR_PRFTEN);
+  __DSB();
+  __ISB();
+}
+
+/* D-Cache invalidation routine from ARM CM7 TRM - still not good enough! */
+IRAM void inv_dcache(void) {
+  __asm volatile(
+      "\
+      .EQU CCSIDR, 0xE000ED80 \n\
+      .EQU CSSELR, 0xE000ED84 \n\
+      .EQU DCISW, 0xE000EF60 \n\
+      MOV r0, #0x0 \n\
+      LDR r11, =CSSELR \n\
+      STR r0, [r11] \n\
+      DSB \n\
+      LDR r11, =CCSIDR \n\
+      LDR r2, [r11] \n\
+      AND r1, r2, #0x7 \n\
+      ADD r7, r1, #0x4 \n\
+      MOV r1, #0x3ff \n\
+      ANDS r4, r1, r2, LSR #3 \n\
+      MOV r1, #0x7fff \n\
+      ANDS r2, r1, r2, LSR #13 \n\
+      CLZ r6, r4 \n\
+      # Select Data Cache size \n\
+      # Cache size identification \n\
+      # Number of words in a cache line \n\
+      LDR r11, =DCISW \n\
+inv_loop1: \n\
+      MOV r1, r4 \n\
+inv_loop2: \n\
+      LSL r3, r1, r6 \n\
+      LSL r8, r2, r7 \n\
+      ORR r3, r3, r8 \n\
+      STR r3, [r11] \n\
+      # Invalidate D-cache line \n\
+      SUBS r1, r1, #0x1 \n\
+      BGE inv_loop2 \n\
+      SUBS r2, r2, #0x1 \n\
+      BGE inv_loop1 \n\
+      DSB \n\
+      ISB \n\
+"
+      :
+      :
+      : "r0", "r1", "r2", "r3", "r4", "r6", "r7", "r8", "r11");
+}
+
+static IRAM void stm32f7_enable_caches(void) {
+  /*
+   * When re-enabling data cache here weird crashes happen when flash is erased.
+   * For now, we just keep the cache disabled.
+   * TODO(rojer): Figure it out.
+   */
+  // inv_dcache();
+  // SCB->CCR |= (SCB_CCR_IC_Msk | SCB_CCR_DC_Msk);
+  SCB->CCR |= SCB_CCR_IC_Msk;
+  FLASH->ACR |= FLASH_ACR_ARTRST;
+  __DSB();
+  __ISB();
+  FLASH->ACR &= ~(FLASH_ACR_ARTRST);
+  __DSB();
+  __ISB();
+  FLASH->ACR |= (FLASH_ACR_ARTEN | FLASH_ACR_PRFTEN);
+}
+
+IRAM void stm32_flush_caches(void) {
+  stm32f7_disable_caches();
+  stm32f7_enable_caches();
 }

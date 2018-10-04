@@ -19,16 +19,14 @@ DEBUG ?= 0
 CC_WRAPPER ?=
 
 # Explicitly disable updater, it's not supported on POSIX build yet.
-MGOS_ENABLE_UPDATER = 0
 MGOS_ENABLE_DEBUG_UDP = 0
 MGOS_ENABLE_BITBANG = 0
 MGOS_ENABLE_SYS_SERVICE = 0
-MGOS_ENABLE_WIFI = 0
 
 LDFLAGS ?=
 
 MGOS_POSIX_FEATURES ?= -DMGOS_PROMPT_DISABLE_ECHO -DMGOS_MAX_NUM_UARTS=2 \
-                       -DMGOS_NUM_GPIO=16 -DMGOS_HAVE_ETHERNET \
+                       -DMGOS_HAVE_ETHERNET \
                        -DMGOS_NUM_HW_TIMERS=0
 MONGOOSE_FEATURES = \
   -DMG_USE_READ_WRITE -DMG_ENABLE_THREADS -DMG_ENABLE_THREADS \
@@ -39,7 +37,7 @@ MONGOOSE_FEATURES = \
 INCLUDES = $(MGOS_IPATH) $(SRC_PATH) $(BUILD_DIR)
 VPATH = $(MGOS_VPATH) $(SRC_PATH)
 MGOS_SRCS = $(notdir $(wildcard *.c)) mgos_init.c  \
-            mongoose.c frozen.c mgos_mongoose.c mgos_event.c mgos_gpio.c \
+            mongoose.c frozen.c mgos_event.c mgos_gpio.c \
             mgos_system.c mgos_time.c mgos_timers.c \
             mgos_config_util.c mgos_sys_config.c mgos_vfs.c mgos_vfs_dev.c \
             $(notdir $(MGOS_CONFIG_C)) $(notdir $(MGOS_RO_VARS_C)) \

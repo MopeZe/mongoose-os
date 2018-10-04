@@ -117,6 +117,7 @@ static void mgos_net_on_change_cb(void *arg) {
   mgos_event_trigger(ei->ev, &evd);
 
   free(ei);
+  (void) if_name;
 }
 
 void mgos_net_dev_event_cb(enum mgos_net_if_type if_type, int if_instance,
@@ -160,11 +161,43 @@ bool mgos_net_get_ip_info(enum mgos_net_if_type if_type, int if_instance,
   return false;
 }
 
-void mgos_net_ip_to_str(const struct sockaddr_in *sin, char *out) {
+char *mgos_net_ip_to_str(const struct sockaddr_in *sin, char *out) {
   union socket_address sa;
   sa.sa.sa_family = AF_INET;
   memcpy(&sa.sin, sin, sizeof(sa.sin));
   mg_sock_addr_to_str(&sa, out, 16, MG_SOCK_STRINGIFY_IP);
+  return out;
+}
+
+bool mgos_net_str_to_ip(const char *ips, struct sockaddr_in *sin) {
+  unsigned int a, b, c, d;
+  if (sscanf(ips, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
+    sin->sin_addr.s_addr = 0;
+    return false;
+  }
+  sin->sin_addr.s_addr = htonl((a << 24) | (b << 16) | (c << 8) | d);
+  return true;
+}
+
+bool mgos_net_str_to_ip_n(struct mg_str ips, struct sockaddr_in *sin) {
+  ips = mg_strdup_nul(ips);
+  bool res = mgos_net_str_to_ip(ips.p, sin);
+  free((void *) ips.p);
+  return res;
+}
+
+char *mgos_get_nameserver() {
+#ifdef MGOS_HAVE_WIFI
+  char *dns = NULL;
+  if (mgos_sys_config_get_wifi_sta_nameserver() != NULL) {
+    dns = strdup(mgos_sys_config_get_wifi_sta_nameserver());
+  } else {
+    dns = mgos_wifi_get_sta_default_dns();
+  }
+  return dns;
+#else
+  return NULL;
+#endif
 }
 
 enum mgos_init_result mgos_net_init(void) {

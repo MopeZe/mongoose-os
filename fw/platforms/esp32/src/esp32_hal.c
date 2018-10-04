@@ -23,15 +23,14 @@
 #include "esp_system.h"
 #include "esp_task_wdt.h"
 
+#include "soc/rtc.h"
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
-#include "soc/rtc.h"
 
 #include "mgos_debug.h"
 #include "mgos_hal.h"
 #include "mgos_sys_config.h"
 #include "mgos_vfs.h"
-#include "fw/platforms/esp32/src/esp32_fs.h"
 
 size_t mgos_get_heap_size(void) {
   multi_heap_info_t info;
@@ -52,7 +51,7 @@ void mgos_dev_system_restart(void) {
 }
 
 void device_get_mac_address(uint8_t mac[6]) {
-  esp_efuse_mac_get_default(mac);
+  esp_base_mac_addr_get(mac);
 }
 
 void mgos_msleep(uint32_t msecs) {
@@ -102,5 +101,7 @@ int mg_ssl_if_mbed_random(void *ctx, unsigned char *buf, size_t len) {
 }
 
 uint32_t mgos_get_cpu_freq(void) {
-  return rtc_clk_cpu_freq_value(rtc_clk_cpu_freq_get());
+  rtc_cpu_freq_config_t c;
+  rtc_clk_cpu_freq_get_config(&c);
+  return c.freq_mhz * 1000000;
 }

@@ -31,6 +31,7 @@
 #include "nvs_flash.h"
 #include "rom/ets_sys.h"
 #include "rom/spi_flash.h"
+#include "soc/efuse_reg.h"
 
 #include "common/cs_dbg.h"
 #include "mgos_core_dump.h"
@@ -46,9 +47,16 @@
 
 #include "esp32_debug.h"
 #include "esp32_exc.h"
+#ifdef MGOS_HAVE_OTA_COMMON
 #include "esp32_updater.h"
+#endif
 
 esp_err_t esp32_wifi_ev(system_event_t *event);
+
+void esp32_system_event_handler_default(system_event_t *event) WEAK;
+void esp32_system_event_handler_default(system_event_t *event) {
+  (void) event;
+}
 
 esp_err_t event_handler(void *ctx, system_event_t *event) {
   switch (event->event_id) {
@@ -88,6 +96,7 @@ esp_err_t event_handler(void *ctx, system_event_t *event) {
 #endif
     default:
       LOG(LL_INFO, ("event: %d", event->event_id));
+      esp32_system_event_handler_default(event);
   }
   return ESP_OK;
 }
@@ -97,7 +106,7 @@ enum mgos_init_result mgos_hal_freertos_pre_init(void) {
 
   srand(esp_random()); /* esp_random() uses HW RNG */
 
-#if MGOS_ENABLE_UPDATER
+#ifdef MGOS_HAVE_OTA_COMMON
   esp32_updater_early_init();
 #endif
 
@@ -109,10 +118,16 @@ enum mgos_init_result mgos_hal_freertos_pre_init(void) {
       ("Boot partition: %s; flash: %uM", esp_ota_get_boot_partition()->label,
        g_rom_flashchip.chip_size / 1048576));
 
-  /* Use default mac as base. Makes no difference but silences warnings. */
-  uint8_t mac[6];
-  esp_efuse_mac_get_default(mac);
-  esp_base_mac_addr_set(mac);
+  {
+    uint8_t mac[6];
+    /* Use cutom MAC as base if it's configured, default otherwise. */
+    if ((REG_READ(EFUSE_BLK3_RDATA5_REG) >> 24) == 1) {
+      esp_efuse_mac_get_custom(mac);
+    } else {
+      esp_efuse_mac_get_default(mac);
+    }
+    esp_base_mac_addr_set(mac);
+  }
 
   /* Disable WDT on idle task(s), mgos task WDT should do fine. */
   TaskHandle_t h;

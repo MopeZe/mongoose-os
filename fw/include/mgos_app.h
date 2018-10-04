@@ -16,8 +16,7 @@
  */
 
 /*
- * This file contains definitions for the user-defined app entry point,
- * `mgos_app_init()`.
+ * Definitions for the user-defined app entry point, `mgos_app_init()`.
  *
  * The `mgos_app_init()` function is like the `main()` function in the C
  * program. This is a app's entry point.
@@ -45,6 +44,20 @@ enum mgos_app_init_result {
 /*
  * User app init function.
  * A weak stub is provided in `mgos_app_init.c`, which can be overridden.
+ *
+ * Example of a user-defined init function:
+ * ```c
+ * #include "mgos_app.h"
+ *
+ * enum mgos_app_init_result mgos_app_init(void) {
+ *   if (!my_super_duper_hardware_init()) {
+ *     LOG(LL_ERROR, ("something went bad"));
+ *     return MGOS_APP_INIT_ERROR;
+ *   }
+ *   LOG(LL_INFO, ("my app initialised"));
+ *   return MGOS_APP_INIT_SUCCESS;
+ * }
+ * ```
  */
 enum mgos_app_init_result mgos_app_init(void);
 

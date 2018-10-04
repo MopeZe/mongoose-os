@@ -36,7 +36,6 @@
 #include "mgos_init.h"
 #include "mgos_mongoose.h"
 #include "mgos_ro_vars.h"
-#include "mgos_updater_common.h"
 #include "mgos_utils.h"
 #include "mgos_vfs.h"
 
@@ -112,20 +111,20 @@ bool load_config_defaults(struct mgos_config *cfg) {
 
 bool save_cfg(const struct mgos_config *cfg, char **msg) {
   bool result = false;
-  struct mgos_config defaults;
+  struct mgos_config *defaults = calloc(1, sizeof(*defaults));
   char *ptr = NULL;
+  if (defaults == NULL) goto clean;
   if (msg == NULL) msg = &ptr;
-  memset(&defaults, 0, sizeof(defaults));
   *msg = NULL;
   int i;
   for (i = 0; i < s_num_validators; i++) {
     if (!s_validators[i](cfg, msg)) goto clean;
   }
-  if (!load_config_defaults(&defaults)) {
+  if (!load_config_defaults(defaults)) {
     *msg = strdup("failed to load defaults");
     goto clean;
   }
-  if (mgos_conf_emit_f(cfg, &defaults, mgos_config_schema(), true /* pretty */,
+  if (mgos_conf_emit_f(cfg, defaults, mgos_config_schema(), true /* pretty */,
                        CONF_USER_FILE)) {
     LOG(LL_INFO, ("Saved to %s", CONF_USER_FILE));
     result = true;
@@ -134,7 +133,10 @@ bool save_cfg(const struct mgos_config *cfg, char **msg) {
   }
 clean:
   free(ptr);
-  mgos_conf_free(mgos_config_schema(), &defaults);
+  if (defaults != NULL) {
+    mgos_conf_free(mgos_config_schema(), defaults);
+    free(defaults);
+  }
   return result;
 }
 
@@ -253,6 +255,7 @@ enum mgos_init_result mgos_sys_config_init(void) {
   mbedtls_debug_set_threshold(mgos_sys_config_get_debug_mbedtls_level());
 #endif
 
+  mgos_ro_vars_set_app(&mgos_sys_ro_vars, MGOS_APP);
   mgos_ro_vars_set_arch(&mgos_sys_ro_vars, CS_STRINGIFY_MACRO(FW_ARCHITECTURE));
   mgos_ro_vars_set_fw_id(&mgos_sys_ro_vars, build_id);
   mgos_ro_vars_set_fw_timestamp(&mgos_sys_ro_vars, build_timestamp);
@@ -317,4 +320,16 @@ bool mgos_config_apply_s(const struct mg_str json, bool save) {
 
 bool mgos_config_apply(const char *json, bool save) {
   return mgos_config_apply_s(mg_mk_str(json), save);
+}
+
+bool mgos_sys_config_parse_sub(const struct mg_str json, const char *section,
+                               void *cfg) {
+  const struct mgos_conf_entry *schema = mgos_config_schema();
+  const struct mgos_conf_entry *sub_schema =
+      mgos_conf_find_schema_entry(section, schema);
+  if (sub_schema == NULL || sub_schema->type != CONF_TYPE_OBJECT ||
+      sub_schema->num_desc == 0) {
+    return false;
+  }
+  return mgos_conf_parse_sub(json, sub_schema, cfg);
 }

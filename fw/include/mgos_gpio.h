@@ -15,12 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * GPIO API - see [wikipedia
- * article](https://en.wikipedia.org/wiki/General-purpose_input/output)
- * for the background information.
- */
-
 #ifndef CS_FW_INCLUDE_MGOS_GPIO_H_
 #define CS_FW_INCLUDE_MGOS_GPIO_H_
 
@@ -86,6 +80,12 @@ bool mgos_gpio_read_out(int pin);
  * is required, use `mgos_gpio_set_int_handler_isr`, but you'll need to
  * understand the implications, which are platform-specific.
  *
+ * Interrupt is automatically cleared once upon triggering.
+ * Then it is disabled until the handler gets a chance to run, at which point
+ * it is re-enabled. At this point it may re-trigger immediately if the
+ * interrupt condition arose again while the handler was pending or running.
+ * Handler may use `mgos_gpio_clear_int` to explicitly clear the condition.
+ *
  * Note that this will not enable the interrupt, this must be done explicitly
  * with `mgos_gpio_enable_int()`.
  */
@@ -105,6 +105,9 @@ bool mgos_gpio_enable_int(int pin);
 
 /* Disables interrupt (without removing the handler). */
 bool mgos_gpio_disable_int(int pin);
+
+/* Clears a GPIO interrupt flag. */
+void mgos_gpio_clear_int(int pin);
 
 /*
  * Removes a previosuly set interrupt handler.
@@ -136,6 +139,18 @@ bool mgos_gpio_set_button_handler(int pin, enum mgos_gpio_pull_type pull_type,
                                   enum mgos_gpio_int_mode int_mode,
                                   int debounce_ms, mgos_gpio_int_handler_f cb,
                                   void *arg);
+
+/*
+ * A utility function that takes care of blinking an LED.
+ * The pin must be configured as output first.
+ * On (output "1") and off ("0") times are specified in milliseconds.
+ * Set to (0, 0) to disable.
+ */
+bool mgos_gpio_blink(int pin, int on_ms, int off_ms);
+
+/* String representation of pin number.
+ * Will return "PA5" or "PK3" for platforms that have port banks. */
+const char *mgos_gpio_str(int pin_def, char buf[8]);
 
 #ifdef __cplusplus
 }

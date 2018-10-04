@@ -29,13 +29,15 @@
 #include "mgos_app.h"
 #include "mgos_core_dump.h"
 #include "mgos_debug_internal.h"
-#include "mgos_gpio.h"
 #include "mgos_hal.h"
 #include "mgos_init_internal.h"
 #include "mgos_mongoose_internal.h"
 #include "mgos_uart_internal.h"
+#include "mgos_utils.h"
+#ifdef MGOS_HAVE_OTA_COMMON
 #include "mgos_updater_common.h"
 #include "mgos_updater_hal.h"
+#endif
 
 #ifndef MGOS_TASK_STACK_SIZE_BYTES
 #define MGOS_TASK_STACK_SIZE_BYTES 8192
@@ -93,30 +95,36 @@ static portMUX_TYPE s_poll_spinlock = portMUX_INITIALIZER_UNLOCKED;
 #define STACK_SIZE_UNIT sizeof(portSTACK_TYPE)
 #endif
 
-uint32_t mg_lwip_get_poll_delay_ms(struct mg_mgr *mgr);
-
 static IRAM void mgos_mg_poll_cb(void *arg) {
-  uint32_t timeout_ms, timeout_ticks, n = 0;
+  int timeout_ms;
   ENTER_CRITICAL();
   do {
-    EXIT_CRITICAL();
     s_mg_want_poll = false;
-    mongoose_poll(0);
-    timeout_ms = mg_lwip_get_poll_delay_ms(mgos_get_mgr());
+    EXIT_CRITICAL();
+    /* While things are happening, keep polling. */
+    while (mongoose_poll(0) != 0)
+      ;
+    /* Things are not happening now, see when they are due to happen. */
+    double min_timer = mg_mgr_min_timer(mgos_get_mgr());
+    if (min_timer > 0) {
+      /* Note: timeout_ms can get negative if a timer is past due. That's ok. */
+      timeout_ms = (int) ((min_timer - mg_time()) * 1000.0);
+      if (timeout_ms < 0) {
+        timeout_ms = 0;
+      } else if (timeout_ms > 1000) {
+        timeout_ms = 1000;
+      }
+    } else {
+      timeout_ms = 1000;
+    }
     ENTER_CRITICAL();
-    if (timeout_ms > 100) timeout_ms = 100;
-    timeout_ticks = timeout_ms / portTICK_PERIOD_MS;
-    n++;
-  } while (n < 10 && (s_mg_want_poll || timeout_ticks == 0));
+  } while (s_mg_want_poll);
   s_mg_poll_scheduled = false;
   s_mg_last_poll++;
   EXIT_CRITICAL();
-  if (!s_mg_want_poll && timeout_ticks > 0) {
-    xTimerChangePeriod(s_mg_poll_timer, timeout_ticks, 10);
-    xTimerReset(s_mg_poll_timer, 10);
-  } else {
-    mongoose_schedule_poll(false /* from_isr */);
-  }
+  int timeout_ticks = MAX(1, (timeout_ms / portTICK_PERIOD_MS));
+  xTimerChangePeriod(s_mg_poll_timer, timeout_ticks, 10);
+  xTimerReset(s_mg_poll_timer, 10);
   (void) arg;
 }
 
@@ -174,23 +182,15 @@ enum mgos_init_result mgos_init2(void) {
     LOG(LL_INFO, ("%s %s (%s)", MGOS_APP, build_version, build_id));
   }
   LOG(LL_INFO, ("Mongoose OS %s (%s)", mg_build_version, mg_build_id));
-  LOG(LL_INFO, ("CPU: %d MHz, RAM: %u total, %u free",
+  LOG(LL_INFO, ("CPU: %d MHz, heap: %u total, %u free",
                 (int) (mgos_get_cpu_freq() / 1000000), mgos_get_heap_size(),
                 mgos_get_free_heap_size()));
-  r = mongoose_init();
-  if (r != MGOS_INIT_OK) return r;
+#ifdef _NEWLIB_VERSION
+  LOG(LL_INFO, ("Newlib %s", _NEWLIB_VERSION));
+#endif
 
   r = mgos_hal_freertos_pre_init();
   if (r != MGOS_INIT_OK) return r;
-
-  r = mgos_fs_init();
-  if (r != MGOS_INIT_OK) return r;
-
-#if MGOS_ENABLE_UPDATER
-  if (mgos_upd_is_first_boot() && mgos_upd_apply_update() < 0) {
-    return MGOS_INIT_APPLY_UPDATE_FAILED;
-  }
-#endif
 
   r = mgos_init();
 
@@ -201,7 +201,7 @@ IRAM void mgos_task(void *arg) {
   struct mgos_event e;
 
   mgos_wdt_enable();
-  mgos_wdt_set_timeout(5 /* seconds */);
+  mgos_wdt_set_timeout(30 /* seconds */);
 
   enum mgos_init_result r = mgos_init2();
   bool success = (r == MGOS_INIT_OK);
@@ -210,7 +210,7 @@ IRAM void mgos_task(void *arg) {
     LOG(LL_ERROR, ("MGOS init failed: %d", r));
   }
 
-#if MGOS_ENABLE_UPDATER
+#if MGOS_HAVE_OTA_COMMON
   mgos_upd_boot_finish(success, mgos_upd_is_first_boot());
 #endif
 
@@ -259,6 +259,7 @@ void mgos_hal_freertos_run_mgos_task(bool start_scheduler) {
   }
 }
 
+#ifndef MGOS_BOOT_BUILD
 IRAM void mgos_ints_disable(void) {
   ENTER_CRITICAL();
 }
@@ -280,13 +281,17 @@ IRAM struct mgos_rlock_type *mgos_rlock_create(void) {
 }
 
 IRAM void mgos_rlock(struct mgos_rlock_type *l) {
+  if (l == NULL) return;
   xSemaphoreTakeRecursive((SemaphoreHandle_t) l, portMAX_DELAY);
 }
 
 IRAM void mgos_runlock(struct mgos_rlock_type *l) {
+  if (l == NULL) return;
   xSemaphoreGiveRecursive((SemaphoreHandle_t) l);
 }
 
 IRAM void mgos_rlock_destroy(struct mgos_rlock_type *l) {
+  if (l == NULL) return;
   vSemaphoreDelete((SemaphoreHandle_t) l);
 }
+#endif /* MGOS_BOOT_BUILD */

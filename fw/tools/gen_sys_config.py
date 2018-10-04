@@ -125,6 +125,8 @@ class SchemaEntry(object):
                 self.default = 0.0
             elif self.vtype == SchemaEntry.V_STRING:
                 self.default = ""
+            else:
+                self.default = None
         elif len(e) == 4:
             self.path, self.vtype, self.default, self.params = e
         else:
@@ -149,6 +151,8 @@ class SchemaEntry(object):
     def ValidateDefault(self):
         if (self.vtype == SchemaEntry.V_BOOL and not isinstance(self.default, bool) or
             self.vtype == SchemaEntry.V_INT and not isinstance(self.default, int) or
+            # In Python, boolvalue is an instance of int, but we don't want that.
+            self.vtype == SchemaEntry.V_INT and isinstance(self.default, bool) or
             self.vtype == SchemaEntry.V_DOUBLE and not isinstance(self.default, float) or
             self.vtype == SchemaEntry.V_STRING and not isinstance(self.default, basestring)):
             raise TypeError("%s: Invalid default value type (%s)" % (self.path, type(self.default)))
@@ -163,29 +167,39 @@ class SchemaEntry(object):
         self.default = other.default
         self.params = other.params
 
+    def __str__(self):
+        return '["%s", "%s", "%s", %s]' % (self.path, self.vtype, self.default, self.params)
+
 
 class Schema(object):
     def __init__(self):
         self._schema = []
+
+    def _FindEntry(self, path):
+        for e in self._schema:
+            if e.path == path: return e
+        return None
 
     def Merge(self, s):
         if type(s) is not list:
             raise TypeError("Schema must be a list, not %s" % (type(s)))
         for el in s:
             e = SchemaEntry(el)
-            for oe in self._schema:
-                if oe.path == e.path:
-                    if oe.vtype == SchemaEntry.V_OBJECT:
-                        raise TypeError("%s: Cannot override an object" % e.path)
-                    break
-            else:
-                oe = None
+            oe = self._FindEntry(e.path)
             if e.vtype is None:
                 if oe is not None:
+                    if oe.vtype == SchemaEntry.V_OBJECT:
+                        raise TypeError("%s: Cannot override an object" % e.path)
                     oe.default = e.default
                     oe.ValidateDefault()
             else:
                 if oe is None:
+                    # Construct containing objects as needed.
+                    pc = e.path.split(".")
+                    for l in range(1, len(pc)):
+                        op = ".".join(pc[:l])
+                        if not self._FindEntry(op):
+                            self._schema.append(SchemaEntry([op, SchemaEntry.V_OBJECT, {}]))
                     self._schema.append(e)
                 else:
                     oe.Assign(e)
@@ -227,13 +241,24 @@ class DefaultsJSONWriter(object):
         self._path.append(d)
 
     def Value(self, e):
+        # Avoid emitting zero value defaults to reduce the size of the file.
+        if (e.vtype == SchemaEntry.V_INT and e.default == 0 or
+            e.vtype == SchemaEntry.V_BOOL and e.default == False or
+            e.vtype == SchemaEntry.V_DOUBLE and e.default == 0.0 or
+            e.vtype == SchemaEntry.V_STRING and e.default == ""):
+            return
         self._path[-1][e.key] = e.default
 
-    def ObjectEnd(self, _e):
-        self._path.pop()
+    def ObjectEnd(self, e):
+        d = self._path.pop()
+        if len(d) == 0:
+            del self._path[-1][e.key]
 
     def __str__(self):
-        return json.dumps(self._defaults, indent=2)
+        s = json.dumps(self._defaults, indent=1)
+        # Python adds trailing spaces to object keys, strip them.
+        s = s.replace(" \n", "\n")
+        return s
 
 
 # Writes a JSON version of the schema.
@@ -429,6 +454,7 @@ class HWriter(object):
 
     def __str__(self):
         return """\
+/* clang-format off */
 /*
  * Generated file - do not edit.
  * Command: {cmd}
@@ -492,18 +518,22 @@ class CWriter(object):
         si = self._start_indices.pop()
         num_desc = len(self._schema_lines) - si - 1
         self._schema_lines[si] = (
-            '  {.type = CONF_TYPE_OBJECT, .key = "%s", .num_desc = %d},'
-            % (e.key, num_desc))
+            '  {.type = CONF_TYPE_OBJECT, .key = "%s", .offset = offsetof(struct %s, %s), .num_desc = %d},'
+            % (e.key, self._struct_name, e.path, num_desc))
 
     def __str__(self):
         return """\
-/* Generated file - do not edit. */
+/* clang-format off */
+/*
+ * Generated file - do not edit.
+ * Command: {cmd}
+ */
 
 #include <stddef.h>
 #include "{name}.h"
 
 const struct mgos_conf_entry {name}_schema_[{num_entries}] = {{
-  {{.type = CONF_TYPE_OBJECT, .key = "", .num_desc = {num_desc}}},
+  {{.type = CONF_TYPE_OBJECT, .key = "", .offset = 0, .num_desc = {num_desc}}},
 {schema_lines}
 }};
 
@@ -512,7 +542,8 @@ const struct mgos_conf_entry *{name}_schema() {{
 }}
 
 {accessor_lines}
-""".format(name=self._struct_name,
+""".format(cmd=' '.join(sys.argv),
+           name=self._struct_name,
            num_entries=len(self._schema_lines) + 1,
            num_desc=len(self._schema_lines),
            schema_lines="\n".join(self._schema_lines),

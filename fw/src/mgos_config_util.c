@@ -56,6 +56,7 @@ struct parse_ctx {
   const char *acl;
   void *cfg;
   bool result;
+  int offset_adj;
 };
 
 const struct mgos_conf_entry *mgos_conf_find_schema_entry_s(
@@ -87,6 +88,7 @@ const struct mgos_conf_entry *mgos_conf_find_schema_entry(
 void mgos_conf_parse_cb(void *data, const char *name, size_t name_len,
                         const char *path, const struct json_token *tok) {
   struct parse_ctx *ctx = (struct parse_ctx *) data;
+  char *endptr = NULL;
 
   (void) name;
   (void) name_len;
@@ -105,28 +107,38 @@ void mgos_conf_parse_cb(void *data, const char *name, size_t name_len,
     LOG(LL_INFO, ("Extra key: [%s]", path));
     return;
   }
+#ifndef MGOS_BOOT_BUILD
   if (e->type != CONF_TYPE_OBJECT &&
       !mgos_conf_check_access(mg_mk_str(path), ctx->acl)) {
     LOG(LL_ERROR, ("Not allowed to set [%s]", path));
     return;
   }
-  char *vp = (((char *) ctx->cfg) + e->offset);
+#endif
+  char *vp = (((char *) ctx->cfg) + e->offset - ctx->offset_adj);
   switch (e->type) {
+    case CONF_TYPE_DOUBLE:
+#ifdef MGOS_BOOT_BUILD
+      ctx->result = false;
+      break;
+#else
+/* fall through */
+#endif
     case CONF_TYPE_INT:
-    case CONF_TYPE_DOUBLE: {
       if (tok->type != JSON_TYPE_NUMBER) {
         LOG(LL_ERROR, ("[%s] is not a number", path));
         ctx->result = false;
         return;
       }
-      char *endptr = NULL;
       switch (e->type) {
         case CONF_TYPE_INT:
-          *((int *) vp) = strtol(tok->ptr, &endptr, 10);
+          /* NB: Using base 0 to accept hex numbers. */
+          *((int *) vp) = strtol(tok->ptr, &endptr, 0);
           break;
+#ifndef MGOS_BOOT_BUILD
         case CONF_TYPE_DOUBLE:
           *((double *) vp) = strtod(tok->ptr, &endptr);
           break;
+#endif
         default:
           /* Can't happen */
           break;
@@ -138,7 +150,6 @@ void mgos_conf_parse_cb(void *data, const char *name, size_t name_len,
         return;
       }
       break;
-    }
     case CONF_TYPE_BOOL: {
       if (tok->type != JSON_TYPE_TRUE && tok->type != JSON_TYPE_FALSE) {
         LOG(LL_ERROR, ("[%s] is not a boolean", path));
@@ -184,12 +195,26 @@ void mgos_conf_parse_cb(void *data, const char *name, size_t name_len,
   LOG(LL_DEBUG, ("Set [%s] = [%.*s]", path, (int) tok->len, tok->ptr));
 }
 
-bool mgos_conf_parse(const struct mg_str json, const char *acl,
-                     const struct mgos_conf_entry *schema, void *cfg) {
-  struct parse_ctx ctx = {
-      .schema = schema, .acl = acl, .cfg = cfg, .result = true};
+static bool mgos_conf_parse_off(const struct mg_str json, const char *acl,
+                                const struct mgos_conf_entry *schema,
+                                int offset_adj, void *cfg) {
+  struct parse_ctx ctx = {.schema = schema,
+                          .acl = acl,
+                          .cfg = cfg,
+                          .result = true,
+                          .offset_adj = offset_adj};
   return (json_walk(json.p, json.len, mgos_conf_parse_cb, &ctx) >= 0 &&
           ctx.result == true);
+}
+
+bool mgos_conf_parse(const struct mg_str json, const char *acl,
+                     const struct mgos_conf_entry *schema, void *cfg) {
+  return mgos_conf_parse_off(json, acl, schema, 0, cfg);
+}
+
+bool mgos_conf_parse_sub(const struct mg_str json,
+                         const struct mgos_conf_entry *sub_schema, void *cfg) {
+  return mgos_conf_parse_off(json, "*", sub_schema, sub_schema->offset, cfg);
 }
 
 struct emit_ctx {

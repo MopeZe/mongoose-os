@@ -16,8 +16,6 @@
  */
 
 /*
- * Event API.
- *
  * Mongoose OS provides a way to get a notification when certain event
  * happens. Each event has an associated event data passed as `void *`.
  */
@@ -73,21 +71,6 @@ enum mgos_event_sys {
    * ev_data: NULL
    */
   MGOS_EVENT_REBOOT,
-
-  /*
-   * Fired on OTA status changes.
-   *
-   * ev_data: struct mgos_ota_status
-   */
-  MGOS_EVENT_OTA_STATUS,
-
-  /*
-   * Triggered when OTA needs to start, and one of the implementations handles
-   * it and performs the OTA.
-   *
-   * ev_data: struct ota_request_param
-   */
-  MGOS_EVENT_OTA_REQUEST,
 
   /*
    * Fired when time is changed with `mgos_settimeofday()`.
