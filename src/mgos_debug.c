@@ -75,17 +75,13 @@ void mgos_debug_write(int fd, const void *data, size_t len) {
     len = mgos_uart_write(uart_no, data, len);
     mgos_uart_flush(uart_no);
   }
-#if CS_ENABLE_STDIO
-  /* Only send LL_INFO messages and below, to avoid loops. */
-  if (!mgos_sys_config_is_initialized() || cs_log_cur_msg_level > LL_INFO) {
-    s_in_debug = false;
-    debug_unlock();
-    return;
+  if (!mgos_sys_config_is_initialized()) {
+    goto out_unlock;
   }
-#endif /* CS_ENABLE_STDIO */
 #if MGOS_ENABLE_DEBUG_UDP
   /* Only send STDERR to UDP. */
-  if (fd == 2) {
+  if (fd == 2 && mgos_sys_config_get_debug_udp_log_addr() != NULL &&
+      cs_log_cur_msg_level <= mgos_sys_config_get_debug_udp_log_level()) {
     static uint32_t s_seq = 0;
     int n = snprintf(
         buf, sizeof(buf), "%s %u %.3lf %d|",
@@ -98,15 +94,22 @@ void mgos_debug_write(int fd, const void *data, size_t len) {
     s_seq++;
   }
 #endif /* MGOS_ENABLE_DEBUG_UDP */
-
   /* Invoke all registered debug_write hooks */
+  /* Only send LL_INFO messages and below, to avoid loops. */
+#if CS_ENABLE_STDIO
+  if (cs_log_cur_msg_level <= LL_INFO)
+#endif
   {
     struct mgos_debug_hook_arg arg = {
-        .buf = buf, .fd = fd, .data = data, .len = len,
+        .buf = buf,
+        .fd = fd,
+        .data = data,
+        .len = len,
     };
     mgos_event_trigger(MGOS_EVENT_LOG, &arg);
   }
 
+out_unlock:
   s_in_debug = false;
   debug_unlock();
 }

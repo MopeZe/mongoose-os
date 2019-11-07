@@ -18,8 +18,8 @@
 #include "esp_gpio.h"
 
 #ifdef RTOS_SDK
-#include <esp_common.h>
 #include <driver_lib/include/gpio.h>
+#include <esp_common.h>
 #else
 #include <user_interface.h>
 #endif
@@ -28,8 +28,8 @@
 #include "mgos_gpio.h"
 #include "mgos_gpio_hal.h"
 
-#include "esp_missing_includes.h"
 #include "common/cs_dbg.h"
+#include "esp_missing_includes.h"
 #include "esp_periph.h"
 
 #define GPIO_PIN_COUNT 16
@@ -194,11 +194,10 @@ IRAM static void esp8266_gpio_isr(void *arg) {
     if (!(s_int_config[i] & INT_ENA) || !(int_st & mask)) continue;
     mgos_gpio_hal_int_cb(i);
   }
-  GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, int_st);
   (void) arg;
 }
 
-IRAM void mgos_gpio_clear_int(int pin) {
+IRAM void mgos_gpio_hal_clear_int(int pin) {
   GPIO_REG_WRITE(GPIO_STATUS_W1TC_ADDRESS, 1 << pin);
 }
 
@@ -250,14 +249,14 @@ bool mgos_gpio_hal_set_int_mode(int pin, enum mgos_gpio_int_mode mode) {
   return true;
 }
 
-IRAM bool mgos_gpio_enable_int(int pin) {
+IRAM bool mgos_gpio_hal_enable_int(int pin) {
   if (pin < 0 || pin > 15) return false;
   s_int_config[pin] |= INT_ENA;
   gpio_pin_intr_state_set(GPIO_ID_PIN(pin), s_int_config[pin] & INT_TYPE_MASK);
   return true;
 }
 
-IRAM bool mgos_gpio_disable_int(int pin) {
+IRAM bool mgos_gpio_hal_disable_int(int pin) {
   if (pin < 0 || pin > 15) return false;
   s_int_config[pin] &= INT_TYPE_MASK;
   gpio_pin_intr_state_set(GPIO_ID_PIN(pin), GPIO_PIN_INTR_DISABLE);

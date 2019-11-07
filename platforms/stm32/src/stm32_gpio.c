@@ -227,6 +227,21 @@ bool mgos_gpio_set_mode(int pin, enum mgos_gpio_mode mode) {
   return true;
 }
 
+bool stm32_gpio_set_mode_analog(int pin, bool adc) {
+  GPIO_TypeDef *regs = stm32_gpio_port_base(pin);
+  if (regs == NULL) return false;
+  if (!stm32_gpio_port_en(pin)) return false;
+  const uint32_t pin_num = STM32_PIN_NUM(pin);
+  uint32_t moder_msk = (3 << (pin_num * 2));
+  MODIFY_REG(regs->MODER, moder_msk, moder_msk);  // Pin mode 3 (analog).
+#ifdef GPIO_ASCR_ASC0
+  MODIFY_REG(regs->ASCR, (1 << pin_num), (((uint32_t) adc) << pin_num));
+#else
+  (void) adc;
+#endif
+  return true;
+}
+
 bool mgos_gpio_set_pull(int pin, enum mgos_gpio_pull_type pull) {
   GPIO_TypeDef *regs = stm32_gpio_port_base(pin);
   if (regs == NULL) return false;
@@ -270,6 +285,9 @@ bool stm32_gpio_set_sleep_pull(int pin, enum mgos_gpio_pull_type pull) {
     SET_BIT(*pd_reg, pin_mask);
   } else {
     CLEAR_BIT(*pd_reg, pin_mask);
+  }
+  if (pull != MGOS_GPIO_PULL_NONE) {
+    HAL_PWREx_EnablePullUpPullDownConfig();
   }
   return true;
 }
@@ -315,9 +333,6 @@ static void stm32_gpio_ext_int_handler(uint32_t exti_min, uint32_t exti_max) {
   uint32_t exti_msk = (1 << exti_min);
   for (uint32_t i = exti_min; i <= exti_max; i++, exti_msk <<= 1) {
     if (!(EXTI->PR & exti_msk)) continue;
-    /* Disable int now, it will be re-enabled when handled. */
-    // CLEAR_BIT(EXTI->IMR, exti_msk);
-    EXTI->PR = exti_msk;
     mgos_gpio_hal_int_cb(STM32_GPIO(exti_selected_port_num(i) + 'A', i));
   }
 }
@@ -332,7 +347,7 @@ static void stm32_gpio_exti2_int_handler(void) {
   stm32_gpio_ext_int_handler(2, 2);
 }
 static void stm32_gpio_exti3_int_handler(void) {
-  stm32_gpio_ext_int_handler(4, 4);
+  stm32_gpio_ext_int_handler(3, 3);
 }
 static void stm32_gpio_exti4_int_handler(void) {
   stm32_gpio_ext_int_handler(4, 4);
@@ -344,7 +359,7 @@ static void stm32_gpio_exti_10_15_int_handler(void) {
   stm32_gpio_ext_int_handler(10, 15);
 }
 
-void mgos_gpio_clear_int(int pin) {
+void mgos_gpio_hal_clear_int(int pin) {
   uint32_t exti_num = STM32_PIN_NUM(pin);
   uint32_t exti_msk = (1 << exti_num);
   EXTI->PR = exti_msk;
@@ -397,7 +412,7 @@ bool mgos_gpio_hal_set_int_mode(int pin, enum mgos_gpio_int_mode mode) {
   return true;
 }
 
-bool mgos_gpio_enable_int(int pin) {
+bool mgos_gpio_hal_enable_int(int pin) {
   uint32_t exti_num = STM32_PIN_NUM(pin);
   uint32_t exti_msk = (1 << exti_num);
   if (exti_selected_port_num(exti_num) != STM32_PIN_PORT_NUM(pin)) {
@@ -407,7 +422,7 @@ bool mgos_gpio_enable_int(int pin) {
   return true;
 }
 
-bool mgos_gpio_disable_int(int pin) {
+bool mgos_gpio_hal_disable_int(int pin) {
   uint32_t exti_num = STM32_PIN_NUM(pin);
   uint32_t exti_msk = (1 << exti_num);
   if (exti_selected_port_num(exti_num) != STM32_PIN_PORT_NUM(pin)) {
