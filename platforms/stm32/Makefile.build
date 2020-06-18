@@ -36,6 +36,8 @@ MGOS_UPDATE_BOOT_LOADER ?= false
 
 MGOS_MG_NET_IF ?= MG_NET_IF_NULL
 
+STM32_NOCACHE_SIZE ?= 0x400
+
 BUILD_LIB_NAME ?= lib.a
 
 # Get list of dirs which contain sources and filesystem files
@@ -121,17 +123,6 @@ MGOS_ROOT_FS_SIZE ?= 0
 MGOS_ROOT_FS_ON_SYS_FLASH ?= 1
 # When FS is not on sys flash, we definitely need to extract.
 MGOS_ROOT_FS_EXTRACT ?= 1-$(MGOS_ROOT_FS_ON_SYS_FLASH)
-# Note: FS options do not correspond to the characteristics of on-board flash,
-# we fake small erases by performing an RMW which is unsafe but works.
-ifeq "$(MGOS_ROOT_FS_TYPE)" "SPIFFS"
-  MKFS ?= /usr/local/bin/mkspiffs8
-  MGOS_ROOT_FS_OPTS ?= {"bs": 4096, "ps": 128, "es": 4096}
-else
-ifeq "$(MGOS_ROOT_FS_TYPE)" "LFS"
-  MKFS ?= /usr/local/bin/mklfs
-  MGOS_ROOT_FS_OPTS ?= {"bs": 4096, "is": 128}
-endif
-endif
 FS_STAGING_DIR = $(BUILD_DIR)/fs
 
 FS_IMG = $(FW_STAGING_DIR)/fs.bin
@@ -164,12 +155,12 @@ FFI_EXPORTS_C = $(GEN_DIR)/ffi_exports.c
 MGOS_SRCS += $(notdir $(MGOS_CONFIG_C)) $(notdir $(MGOS_RO_VARS_C)) \
              mgos_config_util.c mgos_core_dump.c mgos_event.c mgos_gpio.c \
              mgos_hw_timers.c mgos_sys_config.c \
-             mgos_time.c mgos_timers.c cs_crc32.c cs_file.c \
+             mgos_time.c mgos_timers.c cs_crc32.c cs_file.c cs_hex.c \
              json_utils.c frozen.c mgos_uart.c cs_rbuf.c mgos_init.c \
              mgos_dlsym.c mgos_file_utils.c mgos_system.c mgos_utils.c \
              arm_exc_top.S arm_exc.c arm_nsleep100.c \
              stm32_entry.c stm32_gpio.c \
-             stm32_hal.c stm32_hw_timers.c \
+             stm32_hal.c stm32_ints.c stm32_hw_timers.c \
              stm32_libc.c \
              stm32_main.c stm32_uart.c \
              error_codes.cpp status.cpp
@@ -184,7 +175,7 @@ STM32_CFLAGS += -DSTM32_SRAM_BASE_ADDR=$(SRAM_BASE_ADDR) -DSTM32_SRAM_SIZE=$(SRA
                 -DMGOS_ROOT_FS_TYPE='$(MGOS_ROOT_FS_TYPE)' \
                 -DMGOS_ROOT_FS_OPTS='$(MGOS_ROOT_FS_OPTS)' \
                 -DMGOS_ROOT_FS_EXTRACT='$(MGOS_ROOT_FS_EXTRACT)' \
-                -DNOCACHE_SIZE=0x400 \
+                -DSTM32_NOCACHE_SIZE=$(STM32_NOCACHE_SIZE) \
                 -DMG_LOCALS
 
 IPATH = $(sort $(APP_SOURCE_DIRS) $(APP_INCLUDES)) \
@@ -216,7 +207,7 @@ LDFLAGS += -Wl,--defsym=SRAM_BASE_ADDR=$(SRAM_BASE_ADDR) -Wl,--defsym=SRAM_SIZE=
            -Wl,--defsym=FLASH_BL_SIZE=$(FLASH_BL_SIZE) \
            -Wl,--defsym=FLASH_BL_CFG_SIZE=$(FLASH_BL_CFG_SIZE) \
            -Wl,--defsym=FLASH_FS_SIZE=$(FLASH_FS_SIZE) \
-           -Wl,--defsym=NOCACHE_SIZE=0x400
+           -Wl,--defsym=NOCACHE_SIZE=$(STM32_NOCACHE_SIZE)
 
 LDFLAGS += -Wl,--gc-sections
 

@@ -15,16 +15,31 @@
  * limitations under the License.
  */
 
-#pragma once
+#include "common/cs_hex.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <ctype.h>
 
-#define MGOS_ESP8266_HW_TIMER_NMI 0x10000
-
-struct mgos_hw_timer_dev_data {};
-
-#ifdef __cplusplus
+static int hextoi(int x) {
+  return (x >= '0' && x <= '9' ? x - '0' : x - 'W');
 }
-#endif
+
+int cs_hex_decode(const char *s, int len, unsigned char *dst, int *dst_len) {
+  int i = 0;
+  unsigned char *p = dst;
+  while (i < len) {
+    int c1, c2;
+    c1 = hextoi(tolower((int) s[i++]));
+    if (c1 < 0 || c1 > 15 || i == len) {
+      i--;
+      break;
+    }
+    c2 = hextoi(tolower((int) s[i++]));
+    if (c2 < 0 || c2 > 15) {
+      i -= 2;
+      break;
+    }
+    *p++ = (unsigned char) ((c1 << 4) | c2);
+  }
+  *dst_len = (int) (p - dst);
+  return i;
+}

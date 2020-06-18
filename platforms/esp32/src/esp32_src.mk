@@ -45,7 +45,7 @@ MGOS_SRCS += mgos_config_util.c mgos_core_dump.c mgos_dlsym.c mgos_event.c \
 VPATH += $(MGOS_ESP_SRC_PATH) $(MGOS_PATH)/common \
          $(MGOS_PATH)/common/platforms/esp/src
 
-MGOS_SRCS += cs_crc32.c cs_file.c cs_rbuf.c json_utils.c
+MGOS_SRCS += cs_crc32.c cs_file.c cs_hex.c cs_rbuf.c json_utils.c
 
 VPATH += $(MGOS_VPATH)
 
@@ -70,7 +70,8 @@ C_CXX_CFLAGS += -DMGOS_APP=\"$(APP)\" -DFW_ARCHITECTURE=$(APP_PLATFORM) \
                 -DMG_ENABLE_FILESYSTEM \
                 -DMG_ENABLE_DIRECTORY_LISTING \
                 -DCS_DISABLE_MD5 -DMG_EXT_MD5 \
-                -DCS_DISABLE_SHA1 -DMG_EXT_SHA1
+                -DCS_DISABLE_SHA1 -DMG_EXT_SHA1 \
+                -DMGOS_NUM_HW_TIMERS=4
 
 CFLAGS += $(C_CXX_CFLAGS)
 CXXFLAGS += $(C_CXX_CFLAGS)

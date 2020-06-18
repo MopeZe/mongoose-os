@@ -47,6 +47,7 @@ SDK_PATH ?=
 MGOS_CC3220_PATH ?= $(MGOS_PATH)/platforms/cc3220
 MGOS_CC32XX_PATH ?= $(MGOS_PATH)/platforms/cc32xx
 MKSPIFFS ?= /usr/local/bin/mkspiffs8
+MGOS_ROOT_FS_TYPE = SPIFFS
 
 # Binary images must be signed. By default, we sign with dummy "playground" keys from the SDK.
 SIG_CERT ?= $(SDK_PATH)/tools/cc32xx_tools/certificate-playground/dummy-root-ca-cert
@@ -109,7 +110,8 @@ MG_FEATURES ?= $(MG_FEATURES_TINY) \
 
 MGOS_FEATURES ?= -DMGOS_VFS_DECLARE_LIBC_DIR_API \
                  -DMGOS_VFS_DEFINE_LIBC_DIR_API \
-                 -DMGOS_VFS_DEFINE_DIRENT
+                 -DMGOS_VFS_DEFINE_DIRENT \
+                 -DMGOS_NUM_HW_TIMERS=4
 
 APP_BIN = $(BUILD_DIR)/$(APP).bin
 APP_BIN_SHA = $(BUILD_DIR)/$(APP).bin.sha
@@ -173,7 +175,7 @@ VPATH += $(SDK_PATH)/source/ti/devices/cc32xx/driverlib \
 SDK_CFLAGS = -DTARGET_IS_CC3220 -DUSE_CC3220_ROM_DRV_API -DUSE_FREERTOS
 
 MGOS_SRCS += $(notdir $(wildcard $(MGOS_CC3220_PATH)/src/*.c)) \
-             cs_crc32.c cs_file.c cs_rbuf.c \
+             cs_crc32.c cs_file.c cs_hex.c cs_rbuf.c \
              frozen.c json_utils.c \
              mgos_config_util.c mgos_core_dump.c mgos_debug.c mgos_dlsym.c mgos_event.c mgos_gpio.c \
              mgos_file_utils.c mgos_init.c \

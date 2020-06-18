@@ -21,9 +21,14 @@
 extern "C" {
 #endif
 
-#define MGOS_ESP8266_HW_TIMER_NMI 0x10000
-
-struct mgos_hw_timer_dev_data {};
+/*
+ * Decodes a hex-encoded string `s` length `len` into `dst`.
+ * `dst` must have enough space to hold the result.
+ * `*dec_len` will contain the resulting length of the string in `dst`
+ * while return value will return number of processed bytes in `src`.
+ * Return value == len indicates successful processing of all the data.
+ */
+int cs_hex_decode(const char *s, int len, unsigned char *dst, int *dst_len);
 
 #ifdef __cplusplus
 }
