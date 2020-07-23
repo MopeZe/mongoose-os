@@ -163,6 +163,7 @@ MGOS_SRCS += $(notdir $(MGOS_CONFIG_C)) $(notdir $(MGOS_RO_VARS_C)) \
              stm32_hal.c stm32_ints.c stm32_hw_timers.c \
              stm32_libc.c \
              stm32_main.c stm32_uart.c \
+             umm_malloc.c \
              error_codes.cpp status.cpp
 
 STM32_IPATH += $(STM32CUBE_PATH)/Drivers/CMSIS/Include
@@ -198,7 +199,7 @@ C_CXX_FLAGS = -Os -ggdb -MD -Wall -Wextra -Werror -pipe \
               $(STM32_CFLAGS)
 
 CFLAGS = -std=gnu99 $(C_CXX_FLAGS) $(APP_CFLAGS)
-CXXFLAGS = -std=gnu++11 -fno-exceptions $(C_CXX_FLAGS) $(APP_CXXFLAGS)
+CXXFLAGS = -std=gnu++11 -fno-exceptions -fno-rtti $(C_CXX_FLAGS) $(APP_CXXFLAGS)
 
 LDFLAGS += -Wl,--defsym=SRAM_BASE_ADDR=$(SRAM_BASE_ADDR) -Wl,--defsym=SRAM_SIZE=$(SRAM_SIZE) \
            -Wl,--defsym=SRAM2_BASE_ADDR=$(SRAM2_BASE_ADDR) -Wl,--defsym=SRAM2_SIZE=$(SRAM2_SIZE) \

@@ -17,17 +17,25 @@
 
 #pragma once
 
-#include "esp_exc.h"
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "common/mg_str.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void esp_dump_core(uint32_t cause, struct regfile *);
+struct esp_flash_write_ctx {
+  uint32_t addr;
+  uint32_t max_size;
+  uint32_t num_erased;
+  uint32_t num_written;
+};
 
-void esp_core_dump_init(void);
-
-void esp_core_dump_set_flash_area(uint32_t addr, uint32_t max_size);
+bool esp_init_flash_write_ctx(struct esp_flash_write_ctx *wctx, uint32_t addr,
+                              uint32_t max_size);
+int esp_flash_write(struct esp_flash_write_ctx *wctx, const struct mg_str data);
 
 #ifdef __cplusplus
 }
