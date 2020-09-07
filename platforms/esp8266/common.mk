@@ -37,7 +37,7 @@ define compile_cxx
 $(call compile_params,$<,$@, $(CXX), $(CXXFLAGS),"CXX")
 endef
 
-C_CXX_FLAGS  = -Wall -Werror -Wundef -Wno-array-bounds \
+C_CXX_FLAGS  = -Wall -w -Wundef -Wno-array-bounds \
                -Wno-error=address-of-packed-member \
                -Wno-error=unused-const-variable \
                -Wno-error=strict-aliasing \
