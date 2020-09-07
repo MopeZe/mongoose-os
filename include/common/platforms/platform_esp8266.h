@@ -57,7 +57,7 @@ typedef struct stat cs_stat_t;
 #endif
 
 #ifndef CS_ENABLE_STDIO
-#define CS_ENABLE_STDIO 1
+#define CS_ENABLE_STDIO 0
 #endif
 
 #define inet_ntop(af, src, dst, size)                                          \
